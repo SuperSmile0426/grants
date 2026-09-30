@@ -1,7 +1,7 @@
 # Gno Sentinel
 
 - GitHub handle: **SuperSmile0426**
-- Email: **superjodev426@gmail.com**
+- Email: **professional.akiranakao@gmail.com**
 - Links:
   - Project repository: https://github.com/SuperSmile0426/gno-sentinel
   - GitHub profile: https://github.com/SuperSmile0426
