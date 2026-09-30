@@ -4,38 +4,38 @@
 - Email: **superjodev426@gmail.com**
 - Links:
   - Project repository: https://github.com/SuperSmile0426/gno-sentinel
-  - Current v0.2 development PR: https://github.com/SuperSmile0426/gno-sentinel/pull/1
   - GitHub profile: https://github.com/SuperSmile0426
 
 ## Project summary
 
 Gno Sentinel is an open-source security tool for Gno.land realms.
 
-The first part of the project is a package-aware static analyzer for `.gno` source code. It checks for Gno-specific security mistakes and produces human-readable and JSON findings that can be used locally or in CI.
+The first part of the project is a package-aware static analyzer for `.gno` source code. It flags Gno-specific security patterns for review and produces human-readable and JSON findings that can be used locally or in CI.
 
-The next part is automatic monitoring of newly published packages. Sentinel will use existing Gno.land indexing infrastructure to detect package publication, retrieve source, run the analyzer, and keep a history of findings.
+The next part is automatic monitoring of newly published packages. Sentinel will use existing Gno.land indexing infrastructure to detect package publications, pass package metadata to a separate source-resolution step, run the analyzer, and keep a history of findings.
 
 The Gno grants README lists real-time contract monitoring and auditing as an example project. Gno Sentinel is focused on that area.
 
-A working prototype already exists. The current v0.2 implementation includes:
+A working v0.2 prototype already exists. The current implementation includes:
 
 - package-aware AST analysis across multiple `.gno` files;
 - CLI and JSON output;
 - severity-based CI failure thresholds;
 - vulnerable/fixed regression fixtures;
 - source excerpts in findings;
-- optional Gno version and network metadata;
+- caller-supplied Gno version and network metadata;
 - four initial Gno-specific rules;
-- an ingestion interface for later tx-indexer integration.
+- an ingestion interface for later tx-indexer integration;
+- pinned validation against selected upstream Gno realms.
 
 Current rules:
 
-- `GNO-PAY-001` — `OriginSend()` without a recognized `IsUserCall()` control-flow guard;
-- `GNO-AUTH-001` — unsafe `OriginCaller()` authorization patterns;
-- `GNO-STATE-001` — exported pointers or getters that expose mutable package-level pointer state, including cross-file cases;
-- `GNO-REALM-001` — unsafe `PreviousRealm()` use in realm-aware functions.
+- `GNO-PAY-001` — flags `OriginSend()` paths where Sentinel cannot identify a recognized direct-user payment guard;
+- `GNO-AUTH-001` — flags `OriginCaller()` use in authorization comparisons for security review;
+- `GNO-STATE-001` — flags exported pointer/getter patterns that may expose mutable state, including cross-file cases; type/capability-aware classification is still planned;
+- `GNO-REALM-001` — flags use of `unsafe.PreviousRealm()` inside functions that accept a `realm` parameter.
 
-Sentinel is not a replacement for manual review. The goal is to catch known Gno-specific patterns early and make those checks reusable across projects.
+The current analyzer is heuristic and does not yet perform full CFG/dominance, SSA, or Gno type/capability analysis. A clean scan is not proof that a realm is secure. Sentinel is intended to catch known Gno-specific patterns early and make those checks reusable across projects.
 
 ### Goals and deliverables
 
@@ -47,8 +47,8 @@ Deliverables:
 
 - stable CLI and JSON formats;
 - package-level analysis across multiple `.gno` files;
-- more Gno parser/type information where useful;
-- Gno-version metadata for rules;
+- additional Gno parser/type/capability information where useful;
+- version-aware rule applicability metadata where verified;
 - deterministic finding order;
 - file/line evidence and source excerpts;
 - CI-compatible exit behavior;
@@ -68,18 +68,20 @@ The first production rule set will focus on Gno-specific issues such as:
 - determinism issues;
 - gas-risk patterns.
 
-A rule will only be included as a production rule when it has a clear security rationale and reproducible vulnerable/fixed examples.
+A rule will only be included as a production rule when it has a clear security rationale and reproducible vulnerable/fixed examples. Where a rule depends on Gno semantics that vary by version, the applicability range will only be marked after verification.
 
 #### 2. Automatic package monitoring
 
-Connect Sentinel to existing Gno.land indexing infrastructure.
+Connect Sentinel to existing Gno.land indexing infrastructure rather than building a separate chain indexer.
+
+The current tx-indexer exposes indexed transactions, including `MsgAddPackage`, and supports real-time block subscriptions. Sentinel will use those capabilities for package-publication detection. Package source retrieval will remain a separate Sentinel component.
 
 Deliverables:
 
-- tx-indexer integration;
+- tx-indexer integration for indexed chain data;
 - detection of new package publications such as `MsgAddPackage`;
-- package/source retrieval;
-- automatic analysis after publication;
+- separate package/source resolution;
+- automatic analysis after source is resolved;
 - package and finding history;
 - deduplication of already analyzed package versions;
 - block, transaction, network, and package metadata.
@@ -91,11 +93,11 @@ Gno.land
     ↓
 tx-indexer
     ↓
-Gno Sentinel
+publication detector
     ↓
 source resolver
     ↓
-security analyzer
+Gno Sentinel analyzer
     ↓
 finding history
 ```
@@ -145,7 +147,7 @@ Each production rule will include:
 - stable rule ID;
 - title and severity;
 - confidence;
-- affected Gno version range where known;
+- affected Gno version range where verified;
 - technical description;
 - security invariant;
 - vulnerable fixture;
@@ -164,13 +166,13 @@ gno-sentinel scan ./my-realm
 
 and use the same checks in CI.
 
-After deployment, Sentinel can automatically analyze newly published packages and keep a history of findings.
+After deployment, Sentinel can automatically detect newly published packages, resolve their source, analyze them, and keep a history of findings.
 
 For security researchers, the rule framework provides a way to turn a confirmed Gno-specific vulnerability pattern into a reusable test.
 
 For other ecosystem tools, the JSON/API output can be consumed by explorers, wallets, monitoring services, or developer platforms.
 
-The project will reuse tx-indexer and other existing Gno infrastructure instead of building a separate indexer.
+The project will reuse tx-indexer and other existing Gno infrastructure instead of building a separate chain indexer.
 
 ### Timeline and milestones
 
@@ -182,7 +184,8 @@ Proposed duration: **12 weeks**.
 Deliverables:
 
 - stabilize the package-aware analyzer;
-- add Gno-native semantic information where practical;
+- add Gno-native semantic/type/capability information where practical;
+- improve rule precision for known heuristic edge cases;
 - finalize rule metadata/versioning;
 - expand to about 8–10 validated rules;
 - add vulnerable/fixed fixtures for each production rule;
@@ -195,6 +198,7 @@ Acceptance criteria:
 - `gno-sentinel scan <package>` produces deterministic results;
 - text and JSON formats are stable;
 - every production rule has vulnerable/fixed tests;
+- known rule limitations are documented;
 - the full suite runs in CI.
 
 #### Milestone 2 — Chain ingestion and automatic scanning
@@ -203,9 +207,9 @@ Acceptance criteria:
 Deliverables:
 
 - tx-indexer integration;
-- new package detection;
-- package/source retrieval;
-- automatic scanning;
+- new package-publication detection;
+- package/source resolution;
+- automatic scanning after source resolution;
 - persisted package/finding history;
 - block, transaction, network, and package metadata;
 - retry/error handling;
@@ -214,9 +218,9 @@ Deliverables:
 Acceptance criteria:
 
 ```text
-package published
+package publication indexed
 → detected
-→ source retrieved
+→ source resolved
 → analyzed
 → findings stored
 ```
@@ -255,10 +259,6 @@ Project repository:
 
 https://github.com/SuperSmile0426/gno-sentinel
 
-Current v0.2 work:
-
-https://github.com/SuperSmile0426/gno-sentinel/pull/1
-
 The current prototype includes:
 
 - Go CLI;
@@ -268,14 +268,17 @@ The current prototype includes:
 - structured findings;
 - text and JSON reports;
 - source evidence;
-- Gno version/network metadata;
+- caller-supplied Gno version/network metadata;
 - regression fixtures;
 - GitHub Actions CI;
-- four initial Gno-specific rules.
+- four initial Gno-specific rules;
+- pinned validation against selected upstream Gno realm code.
+
+The upstream calibration is used to identify false positives and rule-model limitations before expanding automated monitoring. Current known limitations include incomplete type/capability analysis and the absence of full CFG/dominance and SSA analysis.
 
 I built the prototype after reviewing Gno's security documentation, realm/runtime security model, existing audit-pattern tooling, and tx-indexer architecture.
 
-I do not want Sentinel to be a UI around existing text-pattern checks. The current direction is package-aware analysis with better semantic context and version-aware rules.
+Sentinel is not intended to be a UI around existing text-pattern checks. The current direction is package-aware analysis with better semantic context, measured rule precision, and version-aware rules where applicability has been verified.
 
 ## Why are you and your team well-suited for this project?
 
@@ -283,7 +286,7 @@ I am a software engineer and security researcher working on source-code auditing
 
 My security work is centered on reproducible results: identify the security property, build a vulnerable case, build a fixed case, and keep the test as a regression check.
 
-That fits this project well because each Sentinel rule needs to be tied to an actual Gno security property instead of relying on generic smart-contract assumptions.
+That fits this project because each Sentinel rule needs to be tied to an actual Gno security property instead of relying on generic smart-contract assumptions.
 
 The prototype is already working, so the grant would fund the next development steps rather than the initial idea.
 
